@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "pentest": {
+      "command": "python3",
+      "args": ["tools_server.py"],
+      "env": {
+        "PENTEST_ALLOWED_TARGETS": "127.0.0.1/32",
+        "PENTEST_DENIED_TARGETS": "",
+        "PENTEST_ALLOW_PIVOT": "0",
+        "PENTEST_ALLOW_INTERPRETER": "0",
+        "PENTEST_ALLOW_ANY_CMD": "0",
+        "PENTEST_TOKEN": ""
+      }
+    }
+  }
+}

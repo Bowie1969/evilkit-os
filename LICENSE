@@ -1,0 +1,68 @@
+EvilKit Commercial License
+Copyright (c) 2026 EvilKit. All rights reserved.
+
+This software is licensed, not sold. It is source-available: you may read this
+repository, but your rights to use it are governed by the terms below.
+
+1. LICENCE GRANT
+
+   Subject to payment of the applicable fee and to the terms of this licence,
+   EvilKit grants you a non-exclusive, non-transferable, worldwide licence to
+   install and use EvilKit for your own internal business or personal purposes,
+   for the number of seats and the term stated in your order or receipt.
+
+   One "seat" means one individual who installs or operates the software. A
+   seat may be reassigned to a different individual only if the original holder
+   stops using the software entirely.
+
+2. RESTRICTIONS
+
+   You may not:
+   a) copy, publish, distribute, sublicense, rent, lease, lend, sell or
+      otherwise make EvilKit available to any third party;
+   b) make EvilKit available as part of a hosted, managed, or service-bureau
+      offering to third parties, whether or not a fee is charged;
+   c) modify, adapt, translate, or create derivative works of EvilKit, except
+      where such restriction is prohibited by applicable law;
+   d) remove, obscure, or alter any copyright, licence, or attribution notice;
+   e) use EvilKit to gain unauthorised access to any system, or in breach of
+      any law or regulation applicable to you.
+
+   Source code is provided for inspection, auditing, and security review only.
+
+3. THIRD-PARTY COMPONENTS
+
+   EvilKit is a launcher. It does not include, and is not affiliated with, the
+   Kimi Code CLI, Moonshot AI, or any other third-party product. You are
+   responsible for obtaining your own account, licence, and API credentials for
+   any third-party software EvilKit launches or integrates with, and for
+   complying with that provider's terms of service.
+
+4. NO WARRANTY
+
+   EVILKIT IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE, TITLE, AND NON-INFRINGEMENT. YOU BEAR THE
+   ENTIRE RISK AS TO THE QUALITY AND PERFORMANCE OF THE SOFTWARE.
+
+5. LIMITATION OF LIABILITY
+
+   TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL THE
+   AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER
+   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING
+   FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+   DEALINGS IN THE SOFTWARE. THE TOTAL AGGREGATE LIABILITY SHALL NOT EXCEED THE
+   AMOUNT YOU PAID FOR THE SOFTWARE IN THE TWELVE MONTHS PRECEDING THE CLAIM.
+
+6. TERMINATION
+
+   This licence terminates automatically if you breach any of its terms. On
+   termination you must stop using and delete all copies of EvilKit.
+
+7. GOVERNING LAW
+
+   This licence is governed by the laws of the jurisdiction in which the
+   licensor is established, without regard to its conflict of law provisions.
+
+For commercial licensing enquiries, or for terms other than those above,
+contact the copyright holder.

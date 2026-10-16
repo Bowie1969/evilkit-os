@@ -1,0 +1,55 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "evilkit-os"
+dynamic = ["version"]
+description = "EvilKit OS — the consolidated, evidence-first, scope-gated operator system for authorized AI security testing."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+keywords = ["kimi", "cli", "launcher", "scope", "pentest", "operator", "appliance"]
+classifiers = [
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Operating System :: POSIX :: Linux",
+  "Operating System :: MacOS",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8,<10",
+  "pyyaml>=6,<7",
+]
+
+[project.urls]
+Homepage = "https://github.com/Bowie1969/evilkit"
+Issues = "https://github.com/Bowie1969/evilkit/issues"
+
+[project.scripts]
+evilkit = "evilkit.cli:main"
+evilkit-os = "evilkit.cli:main"
+evilkimi = "evilkit.kimi:main"
+evilqwen = "evilkit.qwen:main"
+evilkit-hook = "evilkit.kimihook:main"
+evilkit-mesh-mcp = "evilkit.mesh_mcp:main"
+
+[tool.hatch.version]
+path = "evilkit/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["evilkit"]
+
+[tool.pytest.ini_options]
+# Each variant/ subtree is its own project with its own tests/ package.
+# Collecting them together collides on test module names ("test_config.py"
+# in root tests/ vs variants/mesh/tests/, etc.), so the canonical suite is
+# tests/ only. To run a variant's suite:
+#   cd variants/<name> && .venv/bin/python -m pytest -q
+testpaths = ["tests"]
+norecursedirs = ["variants", ".venv", "runs", "build", "dist", ".git"]

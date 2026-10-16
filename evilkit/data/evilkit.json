@@ -1,0 +1,26 @@
+{
+  "name": "evilkit",
+  "displayName": "EvilKit",
+  "base": "dark",
+  "colors": {
+    "primary": "#E5484D",
+    "accent": "#FF7A70",
+    "text": "#EBE2E0",
+    "textStrong": "#FDF6F4",
+    "textDim": "#A6918D",
+    "textMuted": "#6E605C",
+    "border": "#4E2E2E",
+    "borderFocus": "#FF4D3D",
+    "success": "#3FD68C",
+    "warning": "#FFB224",
+    "error": "#FF5147",
+    "diffAdded": "#3FB68B",
+    "diffRemoved": "#F2555A",
+    "diffAddedStrong": "#7BE0B5",
+    "diffRemovedStrong": "#FF9A8F",
+    "diffGutter": "#7A6A66",
+    "diffMeta": "#9F8FD8",
+    "roleUser": "#FF8F6B",
+    "shellMode": "#FF4D6D"
+  }
+}

@@ -1,0 +1,68 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Engagement output is sensitive runtime data, never source material.
+runs/
+evidence/keystone-run*/
+variants/evilqwen/evidence/turn-*.json
+**/learning_ledger.jsonl
+
+# Mesh enrollment and local operator state contain private addresses/tokens.
+.evilkit-mesh/
+**/.evilkit-mesh/
+connection.json
+clone-display.jsonl
+
+# Never commit a real project config: it holds authorized scopes and tokens.
+# Backups, mkstemp staging files and the sidecar lock file are written beside
+# the target, so every pattern has to cover any *.mcp.json basename and not
+# just the default ".mcp.json".
+.mcp.json
+*.mcp.json
+.mcp.json.*.bak
+*.mcp.json.*.bak
+.mcp.json.new
+*.mcp.json.new
+.mcp.json.*.new
+*.mcp.json.*.new
+.mcp.json.lock
+*.mcp.json.lock
+
+# Local secrets and environment
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+*.p12
+secrets.env
+.netrc
+id_rsa
+id_ed25519
+id_ecdsa
+id_dsa
+
+# Mobile companion runtime data and build artifacts
+mobile/companion/__pycache__/
+mobile/companion/*.jsonl
+mobile/companion/data/
+mobile/ios/build/
+mobile/ios/DerivedData/
+mobile/ios/*.xcworkspace/xcuserdata/
+mobile/ios/*.xcodeproj/xcuserdata/
+
+# Editors and OS cruft
+.DS_Store
+.idea/
+.vscode/
+*.swp
