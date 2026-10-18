@@ -132,7 +132,8 @@ class ConsolidationTests(unittest.TestCase):
             engine="kimi", session_id="s1",
         )
         journal = json.loads((self.run / "journal.jsonl").read_text())
-        self.assertEqual(event["event"], "host_compromised")  # board sees an attack on the jump
+        self.assertEqual(event["event"], "pivot")
+        self.assertEqual(event["edge"]["traffic_class"], "tunnel")
         self.assertEqual(journal["event"], "pivot")
         self.assertEqual(journal["host"], "10.99.50.21")
         self.assertEqual(journal["target"], "10.50.0.14")
@@ -150,6 +151,25 @@ class ConsolidationTests(unittest.TestCase):
         )
         journal = json.loads((self.run / "journal.jsonl").read_text())
         self.assertEqual(journal["event"], "recon")
+
+    def test_every_evilkit_phase_keeps_its_dashboard_identity(self) -> None:
+        bridge = DashboardTelemetry(self.run)
+        expected = {
+            "nmap_scan": ("recon", "recon"),
+            "netexec": ("host_compromised", "attack"),
+            "password_crack": ("privesc", "attack"),
+            "ssh_tunnel": ("pivot", "tunnel"),
+            "malware_deploy": ("implant", "attack"),
+            "malware_persist": ("persist", "attack"),
+            "malware_worm": ("lateral", "attack"),
+            "malware_c2": ("c2", "attack"),
+            "malware_classify": ("exfil", "data"),
+        }
+        for tool, (event_name, traffic_class) in expected.items():
+            with self.subTest(tool=tool):
+                event = bridge.emit_action(f"{tool} 10.99.50.11", 0, tool)
+                self.assertEqual(event["event"], event_name)
+                self.assertEqual(event["edge"]["traffic_class"], traffic_class)
 
     def test_a_banked_flag_journals_as_exfil_with_the_token(self) -> None:
         """The crown-exfil scorer searches journal text for the flag value, so a

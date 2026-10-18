@@ -8,6 +8,7 @@ from pathlib import Path
 
 from . import __version__
 from . import appliance as appliance_mod
+from . import build as build_mod
 from . import commands
 from . import config as config_mod
 
@@ -20,8 +21,8 @@ EXIT_ERROR = 1
 EXIT_USAGE = 2
 
 COMMANDS = (
-    "run", "kimi", "qwen", "mesh", "osint", "patch-diff-poc", "scope",
-    "log", "watch", "doctor", "theme", "config", "agent", "lessons",
+    "run", "kimi", "qwen", "mesh", "osint", "patch-diff-poc", "script-harness",
+    "scope", "log", "watch", "doctor", "theme", "config", "agent", "lessons",
     "learn", "hooks", "dashboard", "calls", "appliance", "version",
 )
 
@@ -185,6 +186,32 @@ def build_parser() -> argparse.ArgumentParser:
     pdp.add_argument("--print-only", action="store_true",
                      help="print the recipe JSON to stdout and do not write files")
 
+    sh_cmd = sub.add_parser(
+        "script-harness",
+        help="run a script against an in-scope target in a disposable sandbox",
+        description="Scope-gate a target, run a script inside bubblewrap (read-only "
+                    "root, fresh workdir), and emit a JSON evidence record with the "
+                    "output, exit code, filesystem diff, timing and optional pcap.",
+    )
+    sh_sub = sh_cmd.add_subparsers(dest="script_harness_command", metavar="ACTION")
+    sh_cmd.set_defaults(script_harness_command="run")
+    sh_run = sh_sub.add_parser("run", help="run a script against a target")
+    sh_run.add_argument("script", metavar="SCRIPT", help="path to the script to run")
+    sh_run.add_argument("--target", required=True, metavar="HOST",
+                        help="target host the script will hit")
+    sh_run.add_argument("--scope", default=None, metavar="TARGETS",
+                        help="authorised scope (default: config default_scope)")
+    sh_run.add_argument("--sandbox", choices=["auto", "bwrap", "none"], default="auto",
+                        help="auto uses bubblewrap when installed (default: auto)")
+    sh_run.add_argument("--timeout", type=float, default=60.0, metavar="SECONDS",
+                        help="script timeout in seconds (default: 60)")
+    sh_run.add_argument("--evidence-dir", type=Path, default=None, metavar="DIR",
+                        help="write workdir + evidence here (default: current directory)")
+    sh_run.add_argument("--pcap-iface", default=None, metavar="IFACE",
+                        help="capture traffic to the target on this interface")
+    sh_run.add_argument("args", nargs="*", metavar="ARGS",
+                        help="arguments passed through to the script")
+
     appliance_cmd = sub.add_parser(
         "appliance",
         help="generate a bootable EvilKit OS appliance seed",
@@ -211,6 +238,48 @@ def build_parser() -> argparse.ArgumentParser:
     seed_cmd.add_argument("--timezone", default="UTC", metavar="TZ")
     seed_cmd.add_argument("--out-dir", type=Path, default=Path("."), metavar="DIR",
                           help="write the seed files here (default: current directory)")
+
+    build_cmd = appliance_sub.add_parser(
+        "build",
+        help="bake a Raspberry Pi drop image from a base image + wheel",
+        description="Render the first-boot artifacts and write them into the boot "
+                    "partition of a Raspberry Pi OS image, root-free via mtools. "
+                    "Produces a bootable drop image, a bake dir and a manifest.",
+    )
+    build_cmd.add_argument("--hostname", required=True, metavar="NAME")
+    build_cmd.add_argument("--user", default="pi", metavar="USER", help="admin user (default: pi)")
+    build_cmd.add_argument("--ssh-key", action="append", default=[], metavar="KEY_OR_PATH",
+                           required=True,
+                           help="public SSH key (literal) or path to a .pub file; "
+                                "repeat for several")
+    build_cmd.add_argument("--scope", default="solo", metavar="TARGETS",
+                           help="authorized scope recorded at first boot (default: solo)")
+    build_cmd.add_argument("--mesh-leader", default=None, metavar="URL",
+                           help="mesh leader URL (requires --mesh-token)")
+    build_cmd.add_argument("--mesh-token", default=None, metavar="TOKEN",
+                           help="mesh token, baked 0640 root:evilk (requires --mesh-leader)")
+    build_cmd.add_argument("--eth0", default=None, metavar="CIDR",
+                           help="static eth0 address, e.g. 10.99.50.60/24 (requires --gateway)")
+    build_cmd.add_argument("--gateway", default=None, metavar="IP",
+                           help="default gateway for --eth0")
+    build_cmd.add_argument("--dns", default="1.1.1.1 9.9.9.9", metavar="SERVERS",
+                           help="space-separated DNS servers (default: 1.1.1.1 9.9.9.9)")
+    build_cmd.add_argument("--wifi-ssid", default=None, metavar="SSID",
+                           help="Wi-Fi SSID (requires --wifi-psk)")
+    build_cmd.add_argument("--wifi-psk", default=None, metavar="PSK",
+                           help="Wi-Fi passphrase (requires --wifi-ssid)")
+    build_cmd.add_argument("--wifi-country", default="AU", metavar="CC")
+    build_cmd.add_argument("--wheel", required=True, type=Path, metavar="WHEEL",
+                           help="the built evilkit-os wheel to bake")
+    build_cmd.add_argument("--base-image", required=True, type=Path, metavar="IMAGE",
+                           help="Raspberry Pi OS .img or .img.xz")
+    build_cmd.add_argument("--output", required=True, type=Path, metavar="IMAGE",
+                           help="where to write the drop image")
+    build_cmd.add_argument("--boot-offset", type=int, default=build_mod.DEFAULT_BOOT_OFFSET,
+                           metavar="BYTES",
+                           help="byte offset of the FAT32 boot partition")
+    build_cmd.add_argument("--dry-run", action="store_true",
+                           help="render the bake dir + print the mtools plan, do not write the image")
 
     scope_cmd = sub.add_parser("scope", help="inspect or change the recorded scope")
     scope_sub = scope_cmd.add_subparsers(dest="scope_command", metavar="ACTION")
@@ -390,6 +459,8 @@ def main(argv: list[str] | None = None) -> int:
         return commands.cmd_osint(args, config, problems)
     if args.command == "patch-diff-poc":
         return commands.cmd_patch_diff_poc(args, config, problems)
+    if args.command == "script-harness":
+        return commands.cmd_script_harness(args, config, problems)
     if args.command == "scope":
         return commands.cmd_scope(args, config)
     if args.command == "log":

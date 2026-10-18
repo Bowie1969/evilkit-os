@@ -11,6 +11,15 @@
         "PENTEST_ALLOW_ANY_CMD": "0",
         "PENTEST_TOKEN": ""
       }
+    },
+    "recon": {
+      "command": "evilkit-rustscan-mcp",
+      "args": [],
+      "env": {
+        "RECON_ALLOWED_TARGETS": "10.99.50.0/24,10.50.0.0/24,10.50.1.0/24",
+        "RECON_DENIED_TARGETS": "192.168.0.0/24,10.10.0.0/16",
+        "RECON_MAX_HOSTS": "256"
+      }
     }
   }
 }

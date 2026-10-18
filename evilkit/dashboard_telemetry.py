@@ -17,6 +17,7 @@ import datetime
 import json
 import os
 import re
+import subprocess
 import tempfile
 import time
 from contextlib import contextmanager
@@ -71,6 +72,16 @@ _PHASE_CLAIMS = frozenset({
     "c2", "exfil",
 })
 
+_DASHBOARD_PHASE_EVENTS = {
+    "privesc": "privesc",
+    "pivot": "pivot",
+    "implant": "implant",
+    "persist": "persist",
+    "lateral": "lateral",
+    "c2": "c2",
+    "exfil": "exfil",
+}
+
 
 def _normalise_tool(name: str) -> str:
     """Reduce a CLI tool name to the tool that actually ran.
@@ -99,22 +110,86 @@ def scorer_verb(tool_name: str, returncode: int, dashboard_event: str) -> str:
 class DashboardTelemetry:
     """Append classified operator traffic to a prepared dashboard run."""
 
-    def __init__(self, run_dir: str | Path | None = None, entry_host: str | None = None) -> None:
+    def __init__(
+        self,
+        run_dir: str | Path | None = None,
+        entry_host: str | None = None,
+        ssh_target: str | None = None,
+    ) -> None:
         configured = run_dir or os.environ.get("EVILKIT_DASHBOARD_RUN_DIR")
         self.run_dir = Path(configured).expanduser() if configured else None
         self.entry_host = entry_host or os.environ.get("EVILKIT_ENTRY_HOST", "10.99.50.60")
+        self.ssh_target = (ssh_target or os.environ.get("EVILKIT_DASHBOARD_SSH", "")).strip()
+        spool = os.environ.get("EVILKIT_DASHBOARD_SPOOL") or str(
+            Path.home() / ".local" / "state" / "evilkit" / "dashboard-spool"
+        )
+        self._spool_dir = Path(spool).expanduser()
 
     @property
     def enabled(self) -> bool:
         """Telemetry is opt-in to a concrete Keystone run, never a shared default."""
         return self.run_dir is not None
 
+    @property
+    def _remote(self) -> bool:
+        """True when the run dir lives on another host and writes go over ssh."""
+        return bool(self.ssh_target)
+
+    def _remote_path(self, *parts: str) -> str:
+        """A single-quoted path on the far side, safe for ``ssh <t> <cmd>``."""
+        full = "/".join((str(self.run_dir),) + parts)
+        return "'" + full.replace("'", "'\"'\"'") + "'"
+
+    def _ssh(self, stdin_bytes: bytes, remote_cmd: str) -> bool:
+        """Run one remote command over ssh, feeding *stdin_bytes* as stdin."""
+        if not self.ssh_target:
+            return False
+        try:
+            proc = subprocess.run(
+                ["ssh", self.ssh_target, remote_cmd],
+                input=stdin_bytes,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=20,
+                check=False,
+            )
+            return proc.returncode == 0
+        except Exception:
+            return False
+
+    def _read_json(self, *parts: str) -> dict[str, Any] | None:
+        """Read a JSON file under the run dir, local or remote."""
+        if not self._remote:
+            path = self.run_dir.joinpath(*parts)
+            try:
+                return json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                return None
+        try:
+            proc = subprocess.run(
+                ["ssh", self.ssh_target, f"cat {self._remote_path(*parts)}"],
+                capture_output=True,
+                timeout=20,
+                check=False,
+            )
+        except Exception:
+            return None
+        if proc.returncode != 0:
+            return None
+        try:
+            return json.loads(proc.stdout.decode("utf-8"))
+        except ValueError:
+            return None
+
     @contextmanager
     def _locked(self):
         if self.run_dir is None:
             yield
             return
-        lock_path = self.run_dir / "dashboard" / ".evilkit.lock"
+        if self._remote:
+            lock_path = self._spool_dir / self.run_dir.name / ".evilkit.lock"
+        else:
+            lock_path = self.run_dir / "dashboard" / ".evilkit.lock"
         lock_path.parent.mkdir(parents=True, exist_ok=True)
         with lock_path.open("a", encoding="utf-8") as handle:
             if fcntl is not None:
@@ -125,16 +200,33 @@ class DashboardTelemetry:
                 if fcntl is not None:
                     fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
-    @staticmethod
-    def _append(path: Path, value: dict[str, Any]) -> None:
+    def _append(self, path: Path, value: dict[str, Any]) -> None:
+        line = json.dumps(value, separators=(",", ":")) + "\n"
+        if self._remote:
+            rel = path.relative_to(self.run_dir)
+            spool = self._spool_dir / self.run_dir.name / rel
+            spool.parent.mkdir(parents=True, exist_ok=True)
+            with spool.open("a", encoding="utf-8") as handle:
+                handle.write(line)
+                handle.flush()
+                os.fsync(handle.fileno())
+            data = spool.read_bytes()
+            if data and self._ssh(data, f"cat >> {self._remote_path(*rel.parts)}"):
+                spool.write_bytes(b"")
+            return
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(value, separators=(",", ":")) + "\n")
+            handle.write(line)
             handle.flush()
             os.fsync(handle.fileno())
 
-    @staticmethod
-    def _atomic_json(path: Path, value: dict[str, Any]) -> None:
+    def _atomic_json(self, path: Path, value: dict[str, Any]) -> None:
+        if self._remote:
+            payload = (json.dumps(value, separators=(",", ":")) + "\n").encode("utf-8")
+            rel = path.relative_to(self.run_dir)
+            remote = self._remote_path(*rel.parts)
+            self._ssh(payload, f"cat > {remote}.tmp && mv {remote}.tmp {remote}")
+            return
         path.parent.mkdir(parents=True, exist_ok=True)
         fd, name = tempfile.mkstemp(dir=path.parent, prefix=path.name + ".", suffix=".tmp")
         staging = Path(name)
@@ -165,10 +257,8 @@ class DashboardTelemetry:
     def _nodes(self) -> dict[str, str]:
         if self.run_dir is None:
             return {}
-        path = self.run_dir / "dashboard" / "topology.json"
-        try:
-            topology = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
+        topology = self._read_json("dashboard", "topology.json")
+        if not isinstance(topology, dict):
             return {}
         nodes: dict[str, str] = {}
         for node in topology.get("nodes", []):
@@ -201,18 +291,14 @@ class DashboardTelemetry:
         ``started`` is the one field the clock cannot do without, so an absent one
         is anchored to this write's own timestamp rather than left unset.
         """
-        path = self.run_dir / "dashboard" / "status.json"
-        try:
-            status = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            status = {}
+        status = self._read_json("dashboard", "status.json") or {}
         if not isinstance(status, dict):
             status = {}
         status.update(fields)
         status["run_id"] = status.get("run_id") or self.run_dir.name
         if not status.get("started"):
             status["started"] = self._iso(float(fields.get("updated_at") or time.time()))
-        self._atomic_json(path, status)
+        self._atomic_json(self.run_dir / "dashboard" / "status.json", status)
 
     def emit_action(
         self,
@@ -246,6 +332,20 @@ class DashboardTelemetry:
             dashboard_event = "exploit"
         resolved_tool = tool_name or action.split(maxsplit=1)[0]
         scorer = scorer_verb(resolved_tool, returncode, dashboard_event)
+        # Successful post-exploitation tools keep their precise phase on the
+        # dashboard. Failed phase claims are downgraded by scorer_verb() and
+        # therefore remain recon/exploit attempts rather than false success.
+        if returncode == 0 and scorer in _DASHBOARD_PHASE_EVENTS:
+            dashboard_event = _DASHBOARD_PHASE_EVENTS[scorer]
+        # Map the event back to the traffic class the board colours edges with.
+        if dashboard_event == "exfil":
+            traffic_class = "data"
+        elif dashboard_event == "pivot":
+            traffic_class = "tunnel"
+        elif dashboard_event == "recon":
+            traffic_class = "recon"
+        else:
+            traffic_class = "attack"
         # Truncate the raw command so a long one-liner can't bloat events.jsonl
         # but the operator still sees the exact invocation on the board.
         command_text = action.strip()
@@ -265,7 +365,7 @@ class DashboardTelemetry:
             "edge": {
                 "src": source_node,
                 "dst": target_node,
-                "traffic_class": activity,
+                "traffic_class": traffic_class,
                 "tool": resolved_tool,
                 "direction": "forward",
             },

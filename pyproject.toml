@@ -38,6 +38,7 @@ evilkimi = "evilkit.kimi:main"
 evilqwen = "evilkit.qwen:main"
 evilkit-hook = "evilkit.kimihook:main"
 evilkit-mesh-mcp = "evilkit.mesh_mcp:main"
+evilkit-rustscan-mcp = "evilkit.rustscan_mcp:main"
 
 [tool.hatch.version]
 path = "evilkit/__init__.py"

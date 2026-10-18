@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import json
+import shlex
 import shutil
 import sys
 import time
@@ -17,12 +18,14 @@ from pathlib import Path
 from . import agent as agent_mod
 from . import appliance as appliance_mod
 from . import audit as audit_mod
+from . import build as build_mod
 from . import call_taxonomy as taxonomy_mod
 from . import config as config_mod
 from . import mcpscope
 from . import osint as osint_mod
 from . import patch_diff_poc as pdp_mod
 from . import scope as scope_mod
+from . import script_harness as script_harness_mod
 from . import theme as theme_mod
 from . import watch as watch_mod
 from .kernel import (
@@ -53,6 +56,7 @@ __all__ = [
     "cmd_osint",
     "cmd_patch_diff_poc",
     "cmd_appliance",
+    "cmd_appliance_build",
     "cmd_lessons",
     "cmd_learn",
     "cmd_hooks",
@@ -1042,7 +1046,47 @@ def cmd_patch_diff_poc(args, config: config_mod.Config, problems: list[str]) -> 
     return EXIT_OK
 
 
+def cmd_script_harness(args, config: config_mod.Config, problems: list[str]) -> int:
+    for problem in problems:
+        print(f"{PROG}: {problem}", file=sys.stderr)
+
+    scope = args.scope or config.default_scope
+    try:
+        record = script_harness_mod.run(
+            args.script,
+            target=args.target,
+            scope=scope,
+            sandbox=args.sandbox,
+            timeout=args.timeout,
+            evidence_dir=args.evidence_dir,
+            passthrough=args.args,
+            pcap_iface=args.pcap_iface,
+        )
+    except script_harness_mod.ScriptHarnessError as exc:
+        print(f"{PROG}: {exc}", file=sys.stderr)
+        return EXIT_ERROR
+
+    evidence_dir = args.evidence_dir or Path.cwd()
+    out_path = evidence_dir / f"harness-{int(record['timestamp'])}.json"
+    out_path.write_text(json.dumps(record, indent=2), encoding="utf-8")
+
+    print(f"{PROG}: script-harness  {record['script']}")
+    print(f"  target    : {record['target']}")
+    print(f"  sandbox   : {record['sandbox']}")
+    print(f"  exit      : {record['returncode']}")
+    print(f"  duration  : {record['duration_s']}s")
+    diff = record["fs_diff"]
+    print(f"  fs diff   : +{len(diff['added'])} ~{len(diff['changed'])} -{len(diff['removed'])}")
+    if record["pcap"]:
+        print(f"  pcap      : {record['pcap']}")
+    print(f"  evidence  : {out_path}")
+    return EXIT_OK
+
+
 def cmd_appliance(args, config: config_mod.Config, problems: list[str]) -> int:
+    if getattr(args, "appliance_command", "seed") == "build":
+        return cmd_appliance_build(args, config, problems)
+
     for problem in problems:
         print(f"{PROG}: {problem}", file=sys.stderr)
 
@@ -1075,4 +1119,50 @@ def cmd_appliance(args, config: config_mod.Config, problems: list[str]) -> int:
     print("Burn the seed into a NoCloud datasource (cidata), or copy bootstrap.sh")
     print("onto a raw image's first-boot hook. First boot installs the operator")
     print(f"system, records scope '{args.scope}', and writes its manifest.")
+    return EXIT_OK
+
+
+def cmd_appliance_build(args, config: config_mod.Config, problems: list[str]) -> int:
+    for problem in problems:
+        print(f"{PROG}: {problem}", file=sys.stderr)
+
+    spec = build_mod.PiBuildSpec(
+        hostname=args.hostname,
+        admin_user=args.user,
+        ssh_keys=list(args.ssh_key),
+        scope=args.scope,
+        mesh_leader=args.mesh_leader,
+        mesh_token=args.mesh_token,
+        eth0_ip=args.eth0,
+        gateway=args.gateway,
+        dns=args.dns,
+        wifi_ssid=args.wifi_ssid,
+        wifi_psk=args.wifi_psk,
+        wifi_country=args.wifi_country,
+        wheel=args.wheel,
+        base_image=args.base_image,
+        output=args.output,
+        boot_offset=args.boot_offset,
+    )
+    invalid = spec.validate()
+    if invalid:
+        for problem in invalid:
+            print(f"{PROG}: {problem}", file=sys.stderr)
+        return EXIT_USAGE
+
+    try:
+        result = build_mod.build_pi_image(spec, dry_run=args.dry_run)
+    except build_mod.BuildError as exc:
+        print(f"{PROG}: build failed: {exc}", file=sys.stderr)
+        return EXIT_ERROR
+
+    if result.dry_run:
+        bake_dir = args.output.parent / (args.output.name + ".bake")
+        print(f"{PROG}: dry run — no image written; artifacts in {bake_dir}")
+        for cmd in result.plan:
+            print("  " + " ".join(shlex.quote(a) for a in cmd))
+        return EXIT_OK
+
+    print(f"{PROG}: baked {result.output}")
+    print(f"{PROG}: manifest -> {result.output}.manifest.md")
     return EXIT_OK
